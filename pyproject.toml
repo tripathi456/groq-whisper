@@ -1,0 +1,16 @@
+[project]
+name = "groq-whisperer"
+version = "0.1.0"
+description = "Ctrl Ctrl to type anywhere"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "dbus-python>=1.3.2",
+    "groq>=0.17.0",
+    "keyboard>=0.13.5",
+    "plyer>=2.1.0",
+    "pyaudio>=0.2.14",
+    "pyautogui>=0.9.54",
+    "pynput>=1.7.7",
+    "pyperclip>=1.9.0",
+]

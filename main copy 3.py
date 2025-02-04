@@ -1,5 +1,3 @@
-# main.py
-
 import os
 import tempfile
 import wave
@@ -11,9 +9,8 @@ import pyautogui
 from groq import Groq
 from pynput import keyboard
 from notifications import show_notification
-from model import get_next_model  # Import the round-robin model selector
 
-# Set up the Groq client using your environment variable for API key.
+# Set up Groq client
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
 # Global variables for recording state
@@ -34,7 +31,7 @@ last_ctrl_time = 0
 CTRL_THRESHOLD = 0.5  # seconds within which two Ctrl presses count as a double tap
 
 def start_audio_stream():
-    """Initialize the PyAudio stream."""
+    """Initialize the pyaudio stream."""
     global pyaudio_instance, audio_stream
     pyaudio_instance = pyaudio.PyAudio()
     audio_stream = pyaudio_instance.open(
@@ -46,7 +43,7 @@ def start_audio_stream():
     )
 
 def stop_audio_stream():
-    """Terminate the PyAudio stream."""
+    """Terminate the pyaudio stream."""
     global pyaudio_instance, audio_stream
     if audio_stream is not None:
         audio_stream.stop_stream()
@@ -79,19 +76,17 @@ def save_audio(frames, sample_rate):
 def transcribe_audio(audio_file_path):
     """
     Transcribe the audio file using Groq's Whisper implementation.
-    Automatically selects the next model from the round-robin list.
     Returns the transcription text on success or None on failure.
     """
     try:
         with open(audio_file_path, "rb") as file:
-            # Select the next model from the round-robin list.
-            model_name = get_next_model()
-            print(f"Using model: {model_name}")
             transcription = client.audio.transcriptions.create(
                 file=(os.path.basename(audio_file_path), file.read()),
-                model=model_name,
+                model="whisper-large-v3",
                 prompt=(
-                    "The audio is by a programmer discussing programming issues "
+                    "The audio is by a programmer discussing programming issues, "
+                    "the programmer mostly uses python and might mention python libraries "
+                    "or reference code in his speech."
                 ),
                 response_format="text",
                 language="en",
@@ -109,13 +104,13 @@ def copy_transcription_to_clipboard(text):
 def on_press(key):
     """
     Callback for key press events.
-    Detects a double-tap on the Ctrl key to toggle recording.
+    Detects double-tap on Ctrl to toggle recording.
     """
     global last_ctrl_time, recording, recording_frames, recording_start_time, recording_thread
     if key in (keyboard.Key.ctrl, keyboard.Key.ctrl_l, keyboard.Key.ctrl_r):
         current_time = time.time()
         if current_time - last_ctrl_time < CTRL_THRESHOLD:
-            # Double Ctrl detected: toggle recording
+            # Double Ctrl detected
             if not recording:
                 # Start recording
                 recording = True
@@ -135,7 +130,7 @@ def on_press(key):
             last_ctrl_time = current_time
 
 def on_release(key):
-    # Not used, but required by the Listener.
+    # Not used, but required by the Listener
     pass
 
 def keyboard_listener():
@@ -145,16 +140,16 @@ def keyboard_listener():
 
 def main():
     global recording, recording_frames, recording_start_time, recording_thread
-    # Start the keyboard listener in a separate thread.
+    # Start the keyboard listener in a separate thread
     listener_thread = threading.Thread(target=keyboard_listener, daemon=True)
     listener_thread.start()
 
     print("Double-tap the Ctrl key (press Ctrl twice quickly) to toggle recording on/off.")
 
     while True:
-        # When not recording and there is a finished recording thread, process the recording.
+        # When not recording and there is a finished recording thread, process the recording
         if not recording and recording_thread is not None:
-            # Wait for the recording thread to finish.
+            # Wait for the recording thread to finish
             recording_thread.join()
             recording_thread = None
             recording_duration = time.time() - recording_start_time if recording_start_time else 0
@@ -162,7 +157,7 @@ def main():
             if recording_duration < 5:
                 print("Recording duration was less than 5 seconds. Skipping transcription.")
             else:
-                # Save the recorded audio to a file.
+                # Save the recorded audio to a file
                 audio_file = save_audio(recording_frames, SAMPLE_RATE)
                 print("Transcribing...")
                 transcription = transcribe_audio(audio_file)
@@ -173,9 +168,9 @@ def main():
                     print("Transcription copied to clipboard.")
                 else:
                     print("Transcription failed.")
-                # Clean up the temporary file.
+                # Clean up the temporary file
                 os.unlink(audio_file)
-            # Reset recording data for the next recording session.
+            # Reset recording data for the next recording session
             recording_thread = None
             recording_frames = []
             recording_start_time = None
