@@ -1,3 +1,8 @@
+This just adds some nice functionalities on top of the original repo.
+
+ it just gives me a notification and also includes rotation between clients.
+
+Original README is below: 
 # Groq Whisperer: Voice-to-Text Transcription Tool
 
 **Groq Whisperer** is a Python-based application that allows users to record audio and transcribe it to text using Groq's Whisper implementation. The transcribed text is automatically copied to the clipboard for easy pasting into other applications.
