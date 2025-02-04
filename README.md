@@ -2,6 +2,8 @@ This just adds some nice functionalities on top of the original repo.
 
  it just gives me a notification and also includes rotation between clients.
 
+just do `uv run main.py`
+
 Original README is below: 
 # Groq Whisperer: Voice-to-Text Transcription Tool
 
