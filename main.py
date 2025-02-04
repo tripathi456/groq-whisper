@@ -30,8 +30,8 @@ CHANNELS = 1
 CHUNK = 1024
 
 # Double-tap detection for Ctrl
-last_ctrl_time = 0
-CTRL_THRESHOLD = 0.5  # seconds within which two Ctrl presses count as a double tap
+last_alt_time = 0
+ALT_THRESHOLD = 0.5  # seconds within which two Ctrl presses count as a double tap
 
 def start_audio_stream():
     """Initialize the PyAudio stream."""
@@ -109,13 +109,13 @@ def copy_transcription_to_clipboard(text):
 def on_press(key):
     """
     Callback for key press events.
-    Detects a double-tap on the Ctrl key to toggle recording.
+    Detects a double-tap on the Alt key to toggle recording.
     """
-    global last_ctrl_time, recording, recording_frames, recording_start_time, recording_thread
-    if key in (keyboard.Key.ctrl, keyboard.Key.ctrl_l, keyboard.Key.ctrl_r):
+    global last_alt_time, recording, recording_frames, recording_start_time, recording_thread
+    if key in (keyboard.Key.alt, keyboard.Key.alt_l, keyboard.Key.alt_r):
         current_time = time.time()
-        if current_time - last_ctrl_time < CTRL_THRESHOLD:
-            # Double Ctrl detected: toggle recording
+        if current_time - last_alt_time < ALT_THRESHOLD:
+            # Double Alt detected: toggle recording
             if not recording:
                 # Start recording
                 recording = True
@@ -130,9 +130,9 @@ def on_press(key):
                 # Stop recording
                 recording = False
                 print("Recording stopped.")
-            last_ctrl_time = 0  # reset the timer
+            last_alt_time = 0  # reset the timer
         else:
-            last_ctrl_time = current_time
+            last_alt_time = current_time
 
 def on_release(key):
     # Not used, but required by the Listener.
