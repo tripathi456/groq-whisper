@@ -1,37 +1,23 @@
-#[cfg(feature = "audio")]
 //! Audio recording module.
 //!
 //! This module provides functionality for recording audio from the microphone.
 
-#[cfg(feature = "audio")]
 use anyhow::{Context, Result};
-#[cfg(feature = "audio")]
 use byteorder::{LittleEndian, WriteBytesExt};
-#[cfg(feature = "audio")]
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-#[cfg(feature = "audio")]
 use cpal::{Sample, SampleFormat};
-#[cfg(feature = "audio")]
 use hound::{WavSpec, WavWriter};
-#[cfg(feature = "audio")]
 use std::fs::File;
-#[cfg(feature = "audio")]
 use std::io::BufWriter;
-#[cfg(feature = "audio")]
 use std::path::Path;
-#[cfg(feature = "audio")]
 use std::sync::{Arc, Mutex};
-#[cfg(feature = "audio")]
 use tempfile::NamedTempFile;
 
 /// Audio configuration constants
-#[cfg(feature = "audio")]
 pub const SAMPLE_RATE: u32 = 16000;
-#[cfg(feature = "audio")]
 pub const CHANNELS: u16 = 1;
 
 /// A struct to hold audio recording state
-#[cfg(feature = "audio")]
 pub struct AudioRecorder {
     /// Buffer to store recorded audio samples
     samples: Arc<Mutex<Vec<i16>>>,
@@ -39,7 +25,6 @@ pub struct AudioRecorder {
     stream: Option<cpal::Stream>,
 }
 
-#[cfg(feature = "audio")]
 impl AudioRecorder {
     /// Create a new AudioRecorder instance
     pub fn new() -> Self {
@@ -156,55 +141,6 @@ impl AudioRecorder {
     }
 }
 
-#[cfg(feature = "audio")]
-impl Default for AudioRecorder {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-// Dummy implementation when audio feature is not enabled
-#[cfg(not(feature = "audio"))]
-use anyhow::Result;
-#[cfg(not(feature = "audio"))]
-use std::path::Path;
-#[cfg(not(feature = "audio"))]
-use tempfile::NamedTempFile;
-
-#[cfg(not(feature = "audio"))]
-pub struct AudioRecorder;
-
-#[cfg(not(feature = "audio"))]
-impl AudioRecorder {
-    pub fn new() -> Self {
-        Self
-    }
-
-    pub fn start_recording(&mut self) -> Result<()> {
-        println!("Audio recording not available (compiled without audio support)");
-        Ok(())
-    }
-
-    pub fn stop_recording(&mut self) {
-        println!("Audio recording not available (compiled without audio support)");
-    }
-
-    pub fn save_to_wav(&self, _path: &Path) -> Result<()> {
-        println!("Audio recording not available (compiled without audio support)");
-        Ok(())
-    }
-
-    pub fn save_to_temp_wav(&self) -> Result<NamedTempFile> {
-        println!("Audio recording not available (compiled without audio support)");
-        Err(anyhow::anyhow!("Audio recording not available (compiled without audio support)"))
-    }
-
-    pub fn get_duration_seconds(&self) -> f64 {
-        0.0
-    }
-}
-
-#[cfg(not(feature = "audio"))]
 impl Default for AudioRecorder {
     fn default() -> Self {
         Self::new()

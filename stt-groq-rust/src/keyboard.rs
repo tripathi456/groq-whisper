@@ -2,7 +2,6 @@
 //!
 //! This module provides functionality for detecting keyboard events.
 
-#[cfg(feature = "keyboard")]
 use device_query::{DeviceQuery, DeviceState, Keycode};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -13,7 +12,6 @@ pub const ALT_THRESHOLD: f64 = 0.5;
 
 /// Keyboard event handler for detecting Alt key double-taps
 pub struct KeyboardHandler {
-    #[cfg(feature = "keyboard")]
     /// Device state for querying keyboard
     device_state: DeviceState,
     /// Last time the Alt key was pressed
@@ -31,7 +29,6 @@ impl KeyboardHandler {
         F: Fn() + Send + 'static,
     {
         Self {
-            #[cfg(feature = "keyboard")]
             device_state: DeviceState::new(),
             last_alt_time: Arc::new(Mutex::new(Instant::now() - Duration::from_secs(10))),
             running: Arc::new(Mutex::new(true)),
@@ -40,7 +37,6 @@ impl KeyboardHandler {
     }
 
     /// Start monitoring keyboard events in a background thread
-    #[cfg(feature = "keyboard")]
     pub fn start_monitoring(&self) -> thread::JoinHandle<()> {
         let device_state = DeviceState::new();
         let last_alt_time = Arc::clone(&self.last_alt_time);
@@ -75,21 +71,6 @@ impl KeyboardHandler {
 
                 was_alt_pressed = alt_pressed;
                 thread::sleep(Duration::from_millis(10));
-            }
-        })
-    }
-
-    /// Dummy implementation when keyboard feature is not enabled
-    #[cfg(not(feature = "keyboard"))]
-    pub fn start_monitoring(&self) -> thread::JoinHandle<()> {
-        let running = Arc::clone(&self.running);
-        
-        thread::spawn(move || {
-            println!("Keyboard monitoring not available (compiled without keyboard support)");
-            
-            // Keep the thread alive until stopped
-            while *running.lock().unwrap() {
-                thread::sleep(Duration::from_secs(1));
             }
         })
     }

@@ -159,17 +159,7 @@ fn main() -> Result<()> {
     // Start keyboard monitoring
     let _keyboard_thread = keyboard_handler.start_monitoring();
     
-    #[cfg(feature = "audio")]
-    {
-        println!("Double-tap the Alt key (press Alt twice quickly) to toggle recording on/off");
-    }
-    
-    #[cfg(not(feature = "audio"))]
-    {
-        println!("Audio recording not available (compiled without audio support)");
-        println!("Double-tap the Alt key will not trigger recording");
-    }
-    
+    println!("Double-tap the Alt key (press Alt twice quickly) to toggle recording on/off");
     println!("Press Ctrl+C to exit");
     
     // Keep the main thread running
