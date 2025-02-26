@@ -149,7 +149,7 @@ def main():
     listener_thread = threading.Thread(target=keyboard_listener, daemon=True)
     listener_thread.start()
 
-    print("Double-tap the Ctrl key (press Ctrl twice quickly) to toggle recording on/off.")
+    print("Double-tap the Alt key (press Alt twice quickly) to toggle recording on/off.")
 
     while True:
         # When not recording and there is a finished recording thread, process the recording.
