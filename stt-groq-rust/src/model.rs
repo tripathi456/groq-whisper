@@ -2,8 +2,8 @@
 //! 
 //! This module provides functionality to select Groq Whisper models in a round-robin fashion.
 
-use std::sync::{Arc, Mutex};
-use itertools::cycle;
+use std::sync::Mutex;
+use std::iter::Cycle;
 
 /// List of available Groq Whisper models.
 pub const MODELS: &[&str] = &[
@@ -15,23 +15,21 @@ pub const MODELS: &[&str] = &[
 
 /// ModelSelector provides round-robin selection of Groq Whisper models.
 pub struct ModelSelector {
-    models_cycle: Mutex<itertools::Cycle<std::slice::Iter<'static, &'static str>>>,
+    models_cycle: Mutex<Cycle<std::slice::Iter<'static, &'static str>>>,
 }
 
 impl ModelSelector {
     /// Create a new ModelSelector instance.
     pub fn new() -> Self {
         Self {
-            models_cycle: Mutex::new(cycle(MODELS.iter())),
+            models_cycle: Mutex::new(MODELS.iter().cycle()),
         }
     }
 
     /// Get the next model in the round-robin sequence.
-    #[instrument(ret)]
     pub fn get_next_model(&self) -> String {
         let mut cycle = self.models_cycle.lock().unwrap();
         let model = (*cycle.next().unwrap()).to_string();
-        debug!(model, "Selected next model");
         model
     }
 }
