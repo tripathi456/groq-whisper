@@ -134,9 +134,12 @@ impl AudioRecorder {
     }
 
     /// Get the duration of the recording in seconds
+    #[instrument(skip(self), ret)]
     pub fn get_duration_seconds(&self) -> f64 {
         let samples = self.samples.lock().unwrap();
-        samples.len() as f64 / (SAMPLE_RATE as f64 * CHANNELS as f64)
+        let duration = samples.len() as f64 / (SAMPLE_RATE as f64 * CHANNELS as f64);
+        debug!(sample_count = samples.len(), duration, "Calculated recording duration");
+        duration
     }
 }
 

@@ -159,8 +159,8 @@ fn main() -> Result<()> {
     // Start keyboard monitoring
     let _keyboard_thread = keyboard_handler.start_monitoring();
     
-    println!("Double-tap the Alt key (press Alt twice quickly) to toggle recording on/off.");
-    println!("Press Ctrl+C to exit.");
+    info!("Double-tap the Alt key (press Alt twice quickly) to toggle recording on/off");
+    info!("Press Ctrl+C to exit");
     
     // Keep the main thread running
     loop {

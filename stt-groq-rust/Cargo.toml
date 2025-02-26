@@ -32,3 +32,8 @@ thiserror = "1.0.50"
 itertools = "0.11.0"
 dotenv = "0.15.0"
 byteorder = "1.4.3"
+
+# Tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+tracing-appender = "0.2"

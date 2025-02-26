@@ -31,8 +31,11 @@ pub fn paste_from_clipboard() -> Result<()> {
 }
 
 /// Copy text to clipboard and paste it
+#[instrument(skip(text), fields(text_len = text.len()))]
 pub fn copy_and_paste(text: &str) -> Result<()> {
+    debug!("Starting copy and paste operation");
     copy_to_clipboard(text)?;
     paste_from_clipboard()?;
+    info!("Copy and paste operation completed");
     Ok(())
 }

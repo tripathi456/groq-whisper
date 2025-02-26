@@ -27,9 +27,12 @@ impl ModelSelector {
     }
 
     /// Get the next model in the round-robin sequence.
+    #[instrument(ret)]
     pub fn get_next_model(&self) -> String {
         let mut cycle = self.models_cycle.lock().unwrap();
-        (*cycle.next().unwrap()).to_string()
+        let model = (*cycle.next().unwrap()).to_string();
+        debug!(model, "Selected next model");
+        model
     }
 }
 

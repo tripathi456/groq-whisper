@@ -29,6 +29,8 @@ pub fn show_notification(title: &str, message: &str, timeout_seconds: u32) {
 ///
 /// * `title` - The title of the notification
 /// * `message` - The message body of the notification
+#[instrument]
 pub fn show_notification_default(title: &str, message: &str) {
+    debug!("Showing notification with default timeout");
     show_notification(title, message, 3);
 }

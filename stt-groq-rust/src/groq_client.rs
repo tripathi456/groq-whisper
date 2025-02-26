@@ -56,6 +56,7 @@ impl GroqClient {
     }
 
     /// Transcribe an audio file using the Groq Whisper API
+    #[instrument(skip(self, audio_path), fields(audio_path = %audio_path.display(), model = %model), err)]
     pub fn transcribe_audio(
         &self,
         audio_path: &Path,
@@ -67,6 +68,8 @@ impl GroqClient {
         let mut file = File::open(audio_path)?;
         let mut buffer = Vec::new();
         file.read_to_end(&mut buffer)?;
+        
+        debug!(bytes = buffer.len(), "Read audio file");
 
         // Create the file part
         let file_name = audio_path
@@ -87,12 +90,16 @@ impl GroqClient {
         
         if let Some(prompt_text) = prompt {
             form = form.text("prompt", prompt_text.to_string());
+            debug!(prompt = %prompt_text, "Added prompt to request");
         }
         
         if let Some(lang) = language {
             form = form.text("language", lang.to_string());
+            debug!(language = %lang, "Added language to request");
         }
 
+        info!("Sending transcription request to Groq API");
+        
         // Make the API request
         let response = self.client
             .post(&format!("{}/audio/transcriptions", GROQ_API_BASE_URL))
@@ -103,11 +110,13 @@ impl GroqClient {
         // Check for errors
         if !response.status().is_success() {
             let error_text = response.text()?;
+            error!(status = %response.status(), error = %error_text, "API request failed");
             return Err(anyhow::anyhow!("API error: {}", error_text));
         }
 
         // Parse the response
         let transcription = response.text()?;
+        info!(chars = transcription.len(), "Received transcription from API");
         Ok(transcription)
     }
 }
