@@ -40,3 +40,5 @@ tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "fm
 tracing-appender = "0.2.3"
 tracing-attributes = "0.1.27"
 time = { version = "0.3", features = ["macros"] }
+tokio = { version = "1.43.0", features = ["full"] }
+rdev = { version = "0.5.3", features = ["serde", "serialize"] }

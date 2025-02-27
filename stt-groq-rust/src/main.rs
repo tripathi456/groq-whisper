@@ -1,9 +1,4 @@
-//! Speech-to-Text application using Groq's Whisper API.
-//!
-//! This application records audio when triggered by a double-tap of the Alt key,
-//! transcribes the audio using Groq's Whisper API, and pastes the transcription
-//! to the clipboard.
-
+use anyhow::Result;
 mod audio;
 mod clipboard;
 mod groq_client;
@@ -12,42 +7,30 @@ mod model;
 mod notifications;
 mod tracing;
 
-use anyhow::Result;
+use std::sync::Arc;
 use audio::AudioRecorder;
 use dotenv::dotenv;
 use groq_client::GroqClient;
 use keyboard::KeyboardHandler;
 use model::ModelSelector;
 use notifications::show_notification_default;
-use std::sync::{Arc, Mutex};
-use std::thread;
 use std::time::{Duration, Instant};
-use crate::tracing::{debug, error, info, info_span, warn};
+use tokio::sync::Mutex;
+use tracing::{debug, error, info, warn};
 
-/// Minimum recording duration in seconds
 const MIN_RECORDING_DURATION: f64 = 5.0;
 
-/// Application state
 struct AppState {
-    /// Audio recorder
     recorder: Arc<Mutex<AudioRecorder>>,
-    /// Flag indicating if recording is in progress
     recording: Arc<Mutex<bool>>,
-    /// Timestamp when recording started
     recording_start_time: Arc<Mutex<Option<Instant>>>,
-    /// Groq API client
     groq_client: Arc<GroqClient>,
-    /// Model selector
     model_selector: Arc<ModelSelector>,
 }
 
 impl AppState {
-    /// Create a new AppState instance
-    // Comment out instrument macro for now
-    // #[instrument]
     fn new() -> Result<Self> {
         let groq_client = Arc::new(GroqClient::new()?);
-        
         Ok(Self {
             recorder: Arc::new(Mutex::new(AudioRecorder::new())),
             recording: Arc::new(Mutex::new(false)),
@@ -57,129 +40,134 @@ impl AppState {
         })
     }
 
-    /// Toggle recording state
-    // Comment out instrument macro for now
-    // #[instrument]
-    fn toggle_recording(&self) {
-        let mut recording = self.recording.lock().unwrap();
-        
+    /// Toggle the recording state.
+    async fn toggle_recording(&self) {
+        let mut recording = self.recording.lock().await;
         if !*recording {
-            // Start recording
+            // Start recording.
             *recording = true;
-            let mut recorder = self.recorder.lock().unwrap();
+            let mut recorder = self.recorder.lock().await;
             if let Err(e) = recorder.start_recording() {
                 error!("Failed to start recording: {}", e);
                 *recording = false;
                 return;
             }
-            
-            *self.recording_start_time.lock().unwrap() = Some(Instant::now());
+            *self.recording_start_time.lock().await = Some(Instant::now());
             info!("Recording started");
             show_notification_default("Recording Started", "Audio recording has started.");
         } else {
-            // Stop recording
+            // Stop recording.
             *recording = false;
             info!("Recording stopped");
-            
-            // Process the recording in a separate thread
-            self.process_recording();
+            let app_state_clone = self.clone();
+            tokio::spawn(async move {
+                app_state_clone.process_recording().await;
+            });
         }
     }
 
-    /// Process the recording (stop recording, transcribe, and paste)
-    // Comment out instrument macro for now
-    // #[instrument]
-    fn process_recording(&self) {
+    /// Process the recording: stop, transcribe, and paste.
+    async fn process_recording(&self) {
+        // Clone needed Arcs.
         let recorder_clone = Arc::clone(&self.recorder);
         let recording_start_time_clone = Arc::clone(&self.recording_start_time);
         let groq_client_clone = Arc::clone(&self.groq_client);
         let model_selector_clone = Arc::clone(&self.model_selector);
-        
-        thread::spawn(move || {
-            // Create a span for the processing thread
-            let _span = info_span!("process_recording_thread").entered();
-            
-            // Stop the recording
-            let mut recorder = recorder_clone.lock().unwrap();
-            recorder.stop_recording();
-            
-            // Check recording duration
-            let start_time = *recording_start_time_clone.lock().unwrap();
-            if let Some(start) = start_time {
-                let duration = start.elapsed().as_secs_f64();
-                debug!(duration, "Recording duration");
-                
-                if duration < MIN_RECORDING_DURATION {
-                    warn!("Recording duration was less than {} seconds. Skipping transcription.", MIN_RECORDING_DURATION);
-                    return;
-                }
-                
-                // Save the recording to a temporary file
-                match recorder.save_to_temp_wav() {
-                    Ok(temp_file) => {
-                        info!("Transcribing audio file");
-                        
-                        // Select the next model
-                        let model = model_selector_clone.get_next_model();
-                        info!(model, "Using model for transcription");
-                        
-                        // Transcribe the audio
-                        match groq_client_clone.transcribe_audio(
+
+        // Create and immediately drop a span in a synchronous block.
+        {
+            let _span = tracing::info_span!("process_recording_thread").entered();
+            info!("Processing recording synchronously...");
+            // _span is dropped here.
+        }
+
+        // Now perform asynchronous operations.
+        let mut recorder = recorder_clone.lock().await;
+        recorder.stop_recording();
+
+        let start_time = recording_start_time_clone.lock().await;
+        if let Some(start) = *start_time {
+            let duration = start.elapsed().as_secs_f64();
+            debug!(duration, "Recording duration");
+            if duration < MIN_RECORDING_DURATION {
+                warn!(
+                    "Recording duration was less than {} seconds. Skipping transcription.",
+                    MIN_RECORDING_DURATION
+                );
+                return;
+            }
+            match recorder.save_to_temp_wav().await {
+                Ok(temp_file) => {
+                    info!("Transcribing audio file");
+                    let model = model_selector_clone.get_next_model();
+                    info!(model, "Using model for transcription");
+                    match groq_client_clone
+                        .transcribe_audio(
                             temp_file.path(),
                             &model,
                             Some("The audio is by a programmer discussing programming issues"),
                             Some("en"),
-                        ) {
-                            Ok(transcription) => {
-                                info!(chars = transcription.len(), "Transcription completed");
-                                debug!("Transcription: {}", transcription);
-                                
-                                // Copy to clipboard and paste
-                                if let Err(e) = clipboard::copy_and_paste(&transcription) {
-                                    error!("Failed to copy/paste transcription: {}", e);
-                                } else {
-                                    info!("Transcription copied to clipboard");
-                                }
-                            }
-                            Err(e) => {
-                                error!("Transcription failed: {}", e);
+                        )
+                        .await
+                    {
+                        Ok(transcription) => {
+                            info!(chars = transcription.len(), "Transcription completed");
+                            debug!("Transcription: {}", transcription);
+                            if let Err(e) = clipboard::copy_and_paste(&transcription) {
+                                error!("Failed to copy/paste transcription: {}", e);
+                            } else {
+                                info!("Transcription copied to clipboard");
                             }
                         }
-                    }
-                    Err(e) => {
-                        error!("Failed to save audio: {}", e);
+                        Err(e) => {
+                            error!("Transcription failed: {}", e);
+                        }
                     }
                 }
+                Err(e) => {
+                    error!("Failed to save audio: {}", e);
+                }
             }
-        });
+        }
     }
 }
 
-fn main() -> Result<()> {
-    // Load environment variables from .env file if present
+// Implement Clone for AppState for task spawning.
+impl Clone for AppState {
+    fn clone(&self) -> Self {
+        Self {
+            recorder: Arc::clone(&self.recorder),
+            recording: Arc::clone(&self.recording),
+            recording_start_time: Arc::clone(&self.recording_start_time),
+            groq_client: Arc::clone(&self.groq_client),
+            model_selector: Arc::clone(&self.model_selector),
+        }
+    }
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
     dotenv().ok();
-    
-    // Initialize tracing
     let _guard = tracing::init_tracing();
     info!("Starting Groq Whisper STT application");
-    
-    // Create application state
+
     let app_state = Arc::new(AppState::new()?);
-    
-    // Create keyboard handler with callback to toggle recording
+
+    // Create a keyboard handler with a callback to toggle recording.
     let app_state_clone = Arc::clone(&app_state);
     let mut keyboard_handler = KeyboardHandler::new(move || {
-        app_state_clone.toggle_recording();
+        let app_state_clone2 = Arc::clone(&app_state_clone);
+        tokio::spawn(async move {
+            app_state_clone2.toggle_recording().await;
+        });
     });
-    
-    // Start keyboard listener
-    let _ = keyboard_handler.start_listening().expect("Failed to start keyboard listener");
-    
-    info!("Double-tap the Alt key (press Alt twice quickly) to toggle recording on/off");
+    keyboard_handler.start_listening()?;
+
+    info!("Double-tap the Alt key to toggle recording on/off");
     info!("Press Ctrl+C to exit");
-    
-    // Keep the main thread running
-    loop {
-        thread::sleep(Duration::from_secs(1));
-    }
+
+    // Wait for Ctrl+C signal for graceful shutdown.
+    tokio::signal::ctrl_c().await?;
+    info!("Shutdown signal received, exiting.");
+    Ok(())
 }
