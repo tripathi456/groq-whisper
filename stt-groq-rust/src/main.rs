@@ -173,5 +173,5 @@ async fn main() -> Result<()> {
     // Wait for Ctrl+C signal for graceful shutdown.
     tokio::signal::ctrl_c().await?;
     info!("Shutdown signal received, exiting.");
-    Ok(())
+    std::process::exit(0);
 }
