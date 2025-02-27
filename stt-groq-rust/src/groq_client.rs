@@ -1,18 +1,19 @@
 use anyhow::{Context, Result};
-use reqwest::multipart::{Form, Part};
-use reqwest::Client;
+use reqwest::{Client};
+use reqwest::blocking;
+use reqwest::blocking::multipart::{Form, Part};
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::path::Path;
-use tokio::fs::File;
-use tokio::io::AsyncReadExt;
+use std::fs::File;
+use std::io::Read;
 use crate::tracing::{debug, error, info, instrument};
 
 const GROQ_API_BASE_URL: &str = "https://api.groq.com/openai/v1";
 
 pub struct GroqClient {
     api_key: String,
-    client: Client,
+    client: Client, // retained for potential async usage
 }
 
 #[derive(Debug, Serialize)]
@@ -37,66 +38,70 @@ impl GroqClient {
             client: Client::new(),
         })
     }
-
+    
+    /// Synchronous transcription method.
     #[instrument(skip(self, audio_path), fields(audio_path = %audio_path.display()))]
-    pub async fn transcribe_audio(
+    pub fn transcribe_audio_sync(
         &self,
         audio_path: &Path,
         model: &str,
         prompt: Option<&str>,
         language: Option<&str>,
     ) -> Result<String> {
-        // Read the audio file asynchronously.
-        let mut file = File::open(audio_path).await
+        // Read the audio file synchronously.
+        let mut file = File::open(audio_path)
             .with_context(|| format!("Failed to open audio file: {}", audio_path.display()))?;
         let mut buffer = Vec::new();
-        file.read_to_end(&mut buffer).await
+        file.read_to_end(&mut buffer)
             .with_context(|| format!("Failed to read audio file: {}", audio_path.display()))?;
         
-        debug!(bytes = buffer.len(), "Read audio file");
+        debug!(bytes = buffer.len(), "Read audio file synchronously");
 
         // Create the multipart file part.
         let file_name = audio_path
             .file_name()
             .and_then(|name| name.to_str())
             .unwrap_or("audio.wav");
-
         let file_part = Part::bytes(buffer)
             .file_name(file_name.to_string())
             .mime_str("audio/wav")?;
-
+        
         let mut form = Form::new().part("file", file_part);
         form = form.text("model", model.to_string());
-        form = form.text("response_format", "text");
+        form = form.text("response_format", "text".to_string());
         if let Some(prompt_text) = prompt {
             form = form.text("prompt", prompt_text.to_string());
-            debug!(prompt = %prompt_text, "Added prompt to request");
+            debug!(prompt = %prompt_text, "Added prompt to sync request");
         }
         if let Some(lang) = language {
             form = form.text("language", lang.to_string());
-            debug!(language = %lang, "Added language to request");
+            debug!(language = %lang, "Added language to sync request");
         }
-
-        info!("Sending transcription request to Groq API");
+        
+        info!("Sending synchronous transcription request to Groq API");
         let url = format!("{}/audio/transcriptions", GROQ_API_BASE_URL);
-        let response = self.client
+        let blocking_client = blocking::Client::new();
+        let response = blocking_client
             .post(&url)
             .header("Authorization", format!("Bearer {}", self.api_key))
             .multipart(form)
             .send()
-            .await
-            .with_context(|| format!("Failed to send transcription request to {}", url))?;
-
+            .with_context(|| format!("Failed to send synchronous transcription request to {}", url))?;
+        
+        debug!(status = ?response.status(), "Received response from synchronous transcription request");
+        
         if !response.status().is_success() {
             let status = response.status();
-            let error_text = response.text().await.unwrap_or_default();
-            error!(status = %status, error = %error_text, "API request failed");
+            let error_text = response.text().unwrap_or_default();
+            error!(status = %status, error = %error_text, "Synchronous API request failed");
             return Err(anyhow::anyhow!("API error: {}", error_text));
         }
-
-        let transcription = response.text().await
-            .with_context(|| "Failed to parse transcription response")?;
-        info!(chars = transcription.len(), "Received transcription from API");
+        
+        let transcription = response.text()
+            .with_context(|| "Failed to parse synchronous transcription response")?;
+        
+        // Log the full transcription for debugging.
+        info!("Received synchronous transcription ({} chars): {}", transcription.len(), transcription);
         Ok(transcription)
     }
 }
