@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
-const MIN_RECORDING_DURATION: f64 = 5.0;
+const MIN_RECORDING_DURATION: f64 = 4.0;
 
 struct AppState {
     recorder: Arc<Mutex<AudioRecorder>>,
@@ -53,7 +53,7 @@ impl AppState {
                 return;
             }
             *self.recording_start_time.lock().await = Some(Instant::now());
-            info!("Recording started");
+            info!("main.rs - Recording started");
             show_notification_default("Recording Started", "Audio recording has started.");
         } else {
             // Stop recording.
@@ -67,69 +67,76 @@ impl AppState {
     }
 
     /// Process the recording: stop, transcribe, and paste.
-    async fn process_recording(&self) {
-        // Clone needed Arcs.
-        let recorder_clone = Arc::clone(&self.recorder);
-        let recording_start_time_clone = Arc::clone(&self.recording_start_time);
-        let groq_client_clone = Arc::clone(&self.groq_client);
-        let model_selector_clone = Arc::clone(&self.model_selector);
+    /// // In AppState::process_recording:
+async fn process_recording(&self) {
+    // Clone needed Arcs.
+    let recorder_clone = Arc::clone(&self.recorder);
+    let recording_start_time_clone = Arc::clone(&self.recording_start_time);
+    let groq_client_clone = Arc::clone(&self.groq_client);
+    let model_selector_clone = Arc::clone(&self.model_selector);
 
-        // Create and immediately drop a span in a synchronous block.
-        {
-            let _span = tracing::info_span!("process_recording_thread").entered();
-            info!("Processing recording synchronously...");
-            // _span is dropped here.
+    {
+        let _span = tracing::info_span!("process_recording_thread").entered();
+        info!("Processing recording synchronously...");
+    }
+
+    let mut recorder = recorder_clone.lock().await;
+    recorder.stop_recording();
+
+    let start_time = recording_start_time_clone.lock().await;
+    if let Some(start) = *start_time {
+        let duration = start.elapsed().as_secs_f64();
+        debug!(duration, "Recording duration");
+        if duration < MIN_RECORDING_DURATION {
+            warn!(
+                "Recording duration was less than {} seconds. Skipping transcription.",
+                MIN_RECORDING_DURATION
+            );
+            return;
         }
-
-        // Now perform asynchronous operations.
-        let mut recorder = recorder_clone.lock().await;
-        recorder.stop_recording();
-
-        let start_time = recording_start_time_clone.lock().await;
-        if let Some(start) = *start_time {
-            let duration = start.elapsed().as_secs_f64();
-            debug!(duration, "Recording duration");
-            if duration < MIN_RECORDING_DURATION {
-                warn!(
-                    "Recording duration was less than {} seconds. Skipping transcription.",
-                    MIN_RECORDING_DURATION
-                );
-                return;
-            }
-            match recorder.save_to_temp_wav().await {
-                Ok(temp_file) => {
-                    info!("Transcribing audio file");
-                    let model = model_selector_clone.get_next_model();
-                    info!(model, "Using model for transcription");
-                    match groq_client_clone
-                        .transcribe_audio(
-                            temp_file.path(),
-                            &model,
-                            Some("The audio is by a programmer discussing programming issues"),
-                            Some("en"),
-                        )
-                        .await
-                    {
-                        Ok(transcription) => {
-                            info!(chars = transcription.len(), "Transcription completed");
-                            debug!("Transcription: {}", transcription);
-                            if let Err(e) = clipboard::copy_and_paste(&transcription) {
-                                error!("Failed to copy/paste transcription: {}", e);
-                            } else {
-                                info!("Transcription copied to clipboard");
-                            }
+        match recorder.save_to_temp_wav().await {
+            Ok(temp_file) => {
+                info!("Transcribing audio file synchronously");
+                let model = model_selector_clone.get_next_model();
+                info!(model, "Using model for transcription");
+                // Run synchronous transcription in a blocking task.
+                let transcription_result = tokio::task::spawn_blocking(move || {
+                    groq_client_clone.transcribe_audio_sync(
+                        temp_file.path(),
+                        &model,
+                        Some("The audio is by a programmer discussing programming issues"),
+                        Some("en"),
+                    )
+                })
+                .await;
+                match transcription_result {
+                    Ok(Ok(transcription)) => {
+                        if transcription.len() < 5 {
+                            warn!("Transcription is very short ({} chars). Verify that the recorded audio is not empty.", transcription.len());
                         }
-                        Err(e) => {
-                            error!("Transcription failed: {}", e);
+                        info!(chars = transcription.len(), "Transcription completed");
+                        // Also log the transcription text.
+                        info!("Transcription text: {}", transcription);
+                        if let Err(e) = clipboard::copy_and_paste(&transcription) {
+                            error!("Failed to copy/paste transcription: {}", e);
+                        } else {
+                            info!("Transcription copied to clipboard");
                         }
                     }
+                    Ok(Err(e)) => {
+                        error!("Transcription failed: {}", e);
+                    }
+                    Err(e) => {
+                        error!("Blocking task panicked: {}", e);
+                    }
                 }
-                Err(e) => {
-                    error!("Failed to save audio: {}", e);
-                }
+            }
+            Err(e) => {
+                error!("Failed to save audio: {}", e);
             }
         }
     }
+}
 }
 
 // Implement Clone for AppState for task spawning.
@@ -153,7 +160,7 @@ async fn main() -> Result<()> {
 
     let app_state = Arc::new(AppState::new()?);
 
-    // Get the current runtime handle.
+    // Capture the runtime handle so the keyboard callback can spawn tasks.
     let rt_handle = tokio::runtime::Handle::current();
 
     // Create a keyboard handler with a callback to toggle recording.
