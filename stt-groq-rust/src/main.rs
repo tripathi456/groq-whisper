@@ -92,6 +92,11 @@ impl AppState {
             let mut recorder = recorder_clone.lock().unwrap();
             recorder.stop_recording();
             
+            // Add a short delay to ensure all audio data is processed
+            drop(recorder);  // Release the lock before sleeping
+            thread::sleep(Duration::from_millis(500));
+            let mut recorder = recorder_clone.lock().unwrap();
+            
             // Check recording duration
             let start_time = *recording_start_time_clone.lock().unwrap();
             if let Some(start) = start_time {
