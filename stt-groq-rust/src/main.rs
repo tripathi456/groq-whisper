@@ -8,6 +8,7 @@ mod notifications;
 mod tracing;
 
 use std::sync::Arc;
+use std::thread;
 use audio::AudioRecorder;
 use dotenv::dotenv;
 use groq_client::GroqClient;
@@ -125,20 +126,13 @@ impl AppState {
                             }
                         }
                     }
-                    Ok(Err(e)) => {
-                        error!("Transcription failed: {}", e);
-                    }
                     Err(e) => {
-                        error!("Blocking task panicked: {}", e);
+                        error!("Failed to save audio: {}", e);
                     }
                 }
             }
-            Err(e) => {
-                error!("Failed to save audio: {}", e);
-            }
-        }
+        });
     }
-}
 }
 
 // Implement Clone for AppState for task spawning.
