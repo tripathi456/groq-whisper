@@ -22,7 +22,8 @@ use notifications::show_notification_default;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
-use crate::tracing::{debug, error, info, info_span, instrument, warn};
+use crate::tracing::{debug, error, info, info_span, warn};
+use tracing_attributes::instrument;
 
 /// Minimum recording duration in seconds
 const MIN_RECORDING_DURATION: f64 = 5.0;
@@ -43,7 +44,8 @@ struct AppState {
 
 impl AppState {
     /// Create a new AppState instance
-    #[instrument(skip(self), ret)]
+    // Comment out instrument macro for now
+    // #[instrument]
     fn new() -> Result<Self> {
         let groq_client = Arc::new(GroqClient::new()?);
         
@@ -57,7 +59,8 @@ impl AppState {
     }
 
     /// Toggle recording state
-    #[instrument(skip(self))]
+    // Comment out instrument macro for now
+    // #[instrument]
     fn toggle_recording(&self) {
         let mut recording = self.recording.lock().unwrap();
         
@@ -85,7 +88,8 @@ impl AppState {
     }
 
     /// Process the recording (stop recording, transcribe, and paste)
-    #[instrument(skip(self))]
+    // Comment out instrument macro for now
+    // #[instrument]
     fn process_recording(&self) {
         let recorder_clone = Arc::clone(&self.recorder);
         let recording_start_time_clone = Arc::clone(&self.recording_start_time);
@@ -165,12 +169,12 @@ fn main() -> Result<()> {
     
     // Create keyboard handler with callback to toggle recording
     let app_state_clone = Arc::clone(&app_state);
-    let keyboard_handler = KeyboardHandler::new(move || {
+    let mut keyboard_handler = KeyboardHandler::new(move || {
         app_state_clone.toggle_recording();
     });
     
-    // Start keyboard monitoring
-    let _keyboard_thread = keyboard_handler.start_monitoring();
+    // Start keyboard listener
+    let _ = keyboard_handler.start_listening().expect("Failed to start keyboard listener");
     
     info!("Double-tap the Alt key (press Alt twice quickly) to toggle recording on/off");
     info!("Press Ctrl+C to exit");

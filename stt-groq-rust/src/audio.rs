@@ -3,12 +3,10 @@
 //! This module provides functionality for recording audio from the microphone.
 
 use anyhow::{Context, Result};
-use byteorder::{LittleEndian, WriteBytesExt};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Sample, SampleFormat, SizedSample};
 use hound::{WavSpec, WavWriter};
-use std::fs::File;
-use std::io::BufWriter;
+use num_traits::cast::ToPrimitive;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use tempfile::NamedTempFile;
@@ -22,7 +20,19 @@ pub struct AudioRecorder {
     /// Buffer to store recorded audio samples
     samples: Arc<Mutex<Vec<i16>>>,
     /// The active audio stream, if recording
-    stream: Option<cpal::Stream>,
+    #[allow(dead_code)]
+    stream: Option<StreamWrapper>,
+}
+
+// Wrapper to make Stream Send and Sync
+struct StreamWrapper(Arc<Mutex<cpal::Stream>>);
+
+unsafe impl Send for StreamWrapper {}
+
+impl StreamWrapper {
+    fn new(stream: cpal::Stream) -> Self {
+        StreamWrapper(Arc::new(Mutex::new(stream)))
+    }
 }
 
 impl AudioRecorder {
@@ -66,7 +76,7 @@ impl AudioRecorder {
         };
 
         stream.play()?;
-        self.stream = Some(stream);
+        self.stream = Some(StreamWrapper::new(stream));
 
         Ok(())
     }
@@ -79,7 +89,7 @@ impl AudioRecorder {
         samples: Arc<Mutex<Vec<i16>>>,
     ) -> Result<cpal::Stream>
     where
-        T: Sample + SizedSample + Send + 'static,
+        T: Sample + SizedSample + Send + 'static + ToPrimitive,
     {
         let err_fn = |err| eprintln!("An error occurred on the audio stream: {}", err);
 
@@ -89,7 +99,9 @@ impl AudioRecorder {
                 let mut sample_lock = samples.lock().unwrap();
                 for &sample in data {
                     // Convert to i16 and store
-                    sample_lock.push(sample.to_i16());
+                    if let Some(value) = sample.to_i16() {
+                        sample_lock.push(value);
+                    }
                 }
             },
             err_fn,

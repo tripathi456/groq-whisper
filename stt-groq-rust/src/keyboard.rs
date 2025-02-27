@@ -2,25 +2,36 @@
 //!
 //! This module provides functionality for detecting keyboard events.
 
-use device_query::{DeviceQuery, DeviceState, Keycode};
+use device_query::{DeviceState, DeviceQuery, Keycode as Key};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
-use crate::tracing::{info, instrument};
+use crate::tracing;
 
 /// Threshold for double-tap detection (in seconds)
 pub const ALT_THRESHOLD: f64 = 0.5;
 
 /// Keyboard event handler for detecting Alt key double-taps
 pub struct KeyboardHandler {
-    /// Device state for querying keyboard
-    device_state: DeviceState,
+    /// Thread handle for querying keyboard
+    device_query_thread: Option<thread::JoinHandle<()>>,
     /// Last time the Alt key was pressed
     last_alt_time: Arc<Mutex<Instant>>,
     /// Flag to control the background thread
     running: Arc<Mutex<bool>>,
     /// Callback function to execute on double-tap
     on_double_tap: Arc<Mutex<Box<dyn Fn() + Send + 'static>>>,
+}
+
+impl std::fmt::Debug for KeyboardHandler {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("KeyboardHandler")
+            .field("device_query_thread", &self.device_query_thread)
+            .field("last_alt_time", &self.last_alt_time)
+            .field("running", &self.running)
+            .field("on_double_tap", &"Box<dyn Fn() + Send + 'static>")
+            .finish()
+    }
 }
 
 impl KeyboardHandler {
@@ -30,58 +41,54 @@ impl KeyboardHandler {
         F: Fn() + Send + 'static,
     {
         Self {
-            device_state: DeviceState::new(),
+            device_query_thread: None,
             last_alt_time: Arc::new(Mutex::new(Instant::now() - Duration::from_secs(10))),
             running: Arc::new(Mutex::new(true)),
             on_double_tap: Arc::new(Mutex::new(Box::new(on_double_tap))),
         }
     }
 
-    /// Start monitoring keyboard events in a background thread
-    pub fn start_monitoring(&self) -> thread::JoinHandle<()> {
-        let device_state = DeviceState::new();
+    /// Start listening for keyboard events in a background thread
+    pub fn start_listening(&mut self) -> Result<(), anyhow::Error> {
         let last_alt_time = Arc::clone(&self.last_alt_time);
         let running = Arc::clone(&self.running);
         let on_double_tap = Arc::clone(&self.on_double_tap);
 
-        thread::spawn(move || {
-            let mut was_alt_pressed = false;
-
+        let handle = thread::spawn(move || {
+            // Create DeviceState inside the thread to avoid Send/Sync issues
+            let device_state = DeviceState::new();
+            
             while *running.lock().unwrap() {
                 let keys = device_state.get_keys();
-                let alt_pressed = keys.contains(&Keycode::LAlt) || keys.contains(&Keycode::RAlt);
+                let alt_pressed = keys.contains(&Key::LAlt) || keys.contains(&Key::RAlt);
 
-                // Detect Alt key press (transition from not pressed to pressed)
-                if alt_pressed && !was_alt_pressed {
+                if alt_pressed {
                     let mut last_time = last_alt_time.lock().unwrap();
-                    let current_time = Instant::now();
-                    let elapsed = current_time.duration_since(*last_time).as_secs_f64();
+                    let now = Instant::now();
+                    let elapsed = now.duration_since(*last_time).as_secs_f64();
 
-                    // Check if this is a double-tap
                     if elapsed < ALT_THRESHOLD {
-                        // Execute the callback
-                        let callback = on_double_tap.lock().unwrap();
-                        callback();
-                        // Reset the timer
-                        *last_time = current_time - Duration::from_secs(10);
-                    } else {
-                        // Update the last press time
-                        *last_time = current_time;
+                        // Double-tap detected
+                        if let Ok(callback) = on_double_tap.lock() {
+                            callback();
+                        }
                     }
+
+                    *last_time = now;
                 }
 
-                was_alt_pressed = alt_pressed;
-                thread::sleep(Duration::from_millis(10));
+                thread::sleep(Duration::from_millis(50));
             }
-        })
+        });
+
+        self.device_query_thread = Some(handle);
+        Ok(())
     }
 
     /// Stop monitoring keyboard events
-    #[instrument(skip(self))]
     pub fn stop_monitoring(&self) {
         let mut running = self.running.lock().unwrap();
         *running = false;
-        info!("Stopping keyboard monitoring");
     }
 }
 

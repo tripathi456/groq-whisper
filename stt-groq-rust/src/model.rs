@@ -4,6 +4,7 @@
 
 use std::sync::Mutex;
 use std::iter::Cycle;
+use tracing::{debug, instrument};
 
 /// List of available Groq Whisper models.
 pub const MODELS: &[&str] = &[
@@ -14,6 +15,7 @@ pub const MODELS: &[&str] = &[
 ];
 
 /// ModelSelector provides round-robin selection of Groq Whisper models.
+#[derive(Debug)]
 pub struct ModelSelector {
     models_cycle: Mutex<Cycle<std::slice::Iter<'static, &'static str>>>,
 }
@@ -27,7 +29,7 @@ impl ModelSelector {
     }
 
     /// Get the next model in the round-robin sequence.
-    #[instrument(ret)]
+    #[instrument]
     pub fn get_next_model(&self) -> String {
         let mut cycle = self.models_cycle.lock().unwrap();
         let model = (*cycle.next().unwrap()).to_string();

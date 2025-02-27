@@ -4,9 +4,7 @@
 
 use anyhow::Result;
 use arboard::Clipboard;
-use enigo::{Enigo, Key, KeyboardControllable};
-use std::thread;
-use std::time::Duration;
+use enigo::{Enigo, Keyboard, Key, Settings, Direction};
 use crate::tracing::{debug, info, instrument}; // Use our local tracing module
 
 /// Copy text to the system clipboard
@@ -16,19 +14,14 @@ pub fn copy_to_clipboard(text: &str) -> Result<()> {
     Ok(())
 }
 
-/// Simulate pressing Ctrl+V to paste from clipboard
-pub fn paste_from_clipboard() -> Result<()> {
-    let mut enigo = Enigo::new();
+/// Simulate system paste operation
+pub fn system_paste() {
+    let settings = Settings::default();
+    let mut enigo = Enigo::new(&settings).unwrap();
     
-    // Small delay to ensure the application is ready
-    thread::sleep(Duration::from_millis(100));
-    
-    // Press Ctrl+V
-    enigo.key_down(Key::Control);
-    enigo.key_click(Key::Layout('v'));
-    enigo.key_up(Key::Control);
-    
-    Ok(())
+    enigo.key(Key::Control, Direction::Press);
+    enigo.key(Key::Unicode('v'), Direction::Click);
+    enigo.key(Key::Control, Direction::Release);
 }
 
 /// Copy text to clipboard and paste it
@@ -36,7 +29,7 @@ pub fn paste_from_clipboard() -> Result<()> {
 pub fn copy_and_paste(text: &str) -> Result<()> {
     debug!("Starting copy and paste operation");
     copy_to_clipboard(text)?;
-    paste_from_clipboard()?;
+    system_paste();
     info!("Copy and paste operation completed");
     Ok(())
 }
