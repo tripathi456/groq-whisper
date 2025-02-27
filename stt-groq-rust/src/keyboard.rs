@@ -6,6 +6,7 @@ use device_query::{DeviceQuery, DeviceState, Keycode};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
+use crate::tracing::{info, instrument};
 
 /// Threshold for double-tap detection (in seconds)
 pub const ALT_THRESHOLD: f64 = 0.5;

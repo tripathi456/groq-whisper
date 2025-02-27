@@ -4,6 +4,7 @@
 
 use notify_rust::{Notification, Timeout};
 use std::time::Duration;
+use crate::tracing::{debug, error, instrument}; // Add this line to import from our tracing module
 
 /// Show a desktop notification with the given title and message.
 ///

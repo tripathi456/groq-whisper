@@ -2,6 +2,9 @@
 //!
 //! This module provides functionality to set up JSON-formatted logging using the tracing framework.
 
+// Re-export tracing macros and types
+pub use tracing::{debug, error, info, warn, trace, instrument, info_span, debug_span, warn_span, error_span, trace_span, Span, Level};
+
 use std::io;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{

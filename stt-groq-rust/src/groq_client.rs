@@ -10,6 +10,7 @@ use std::env;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+use crate::tracing::{debug, error, info, instrument};
 
 /// Groq API base URL
 const GROQ_API_BASE_URL: &str = "https://api.groq.com/openai/v1";

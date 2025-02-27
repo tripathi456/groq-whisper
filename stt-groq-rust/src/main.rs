@@ -12,7 +12,7 @@ mod model;
 mod notifications;
 mod tracing;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use audio::AudioRecorder;
 use dotenv::dotenv;
 use groq_client::GroqClient;
@@ -22,7 +22,7 @@ use notifications::show_notification_default;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
-use tracing::{debug, error, info, info_span, instrument, warn};
+use crate::tracing::{debug, error, info, info_span, instrument, warn};
 
 /// Minimum recording duration in seconds
 const MIN_RECORDING_DURATION: f64 = 5.0;

@@ -5,7 +5,7 @@
 use anyhow::{Context, Result};
 use byteorder::{LittleEndian, WriteBytesExt};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{Sample, SampleFormat};
+use cpal::{Sample, SampleFormat, SizedSample};
 use hound::{WavSpec, WavWriter};
 use std::fs::File;
 use std::io::BufWriter;
@@ -79,7 +79,7 @@ impl AudioRecorder {
         samples: Arc<Mutex<Vec<i16>>>,
     ) -> Result<cpal::Stream>
     where
-        T: Sample + Send + 'static,
+        T: Sample + SizedSample + Send + 'static,
     {
         let err_fn = |err| eprintln!("An error occurred on the audio stream: {}", err);
 
