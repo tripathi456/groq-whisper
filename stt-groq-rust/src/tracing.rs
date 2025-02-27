@@ -7,7 +7,7 @@ pub use tracing::{debug, error, info, warn, instrument, info_span};
 
 use std::io;
 use std::path::PathBuf;
-use time::format_description;
+use time::macros::format_description;
 use time::OffsetDateTime;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling;
