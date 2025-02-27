@@ -62,7 +62,7 @@ impl AppState {
             info!("Recording stopped");
             let app_state_clone = self.clone();
             tokio::spawn(async move {
-                app_state_clone.process_recording().await;
+                app_state_clone.process_recording();
             });
         }
     }

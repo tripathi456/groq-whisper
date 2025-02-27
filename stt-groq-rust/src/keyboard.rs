@@ -34,6 +34,7 @@ impl KeyboardHandler {
         let on_double_tap = Arc::clone(&self.on_double_tap);
         let running = Arc::clone(&self.running);
 
+        #[cfg(feature = "ui")]
         let handle = thread::spawn(move || {
             let callback = move |event: Event| {
                 // Check shutdown flag.
@@ -58,6 +59,19 @@ impl KeyboardHandler {
 
             if let Err(error) = listen(callback) {
                 error!("Keyboard listener error: {:?}", error);
+            }
+        });
+
+        #[cfg(not(feature = "ui"))]
+        let handle = thread::spawn(move || {
+            // Dummy implementation that just logs a message
+            error!("Keyboard monitoring is not available (ui feature not enabled)");
+            // Keep the thread alive but do nothing
+            loop {
+                if !*running.lock().unwrap() {
+                    break;
+                }
+                thread::sleep(Duration::from_secs(1));
             }
         });
         self.listener_handle = Some(handle);

@@ -147,6 +147,9 @@ impl AudioRecorder {
     pub fn stop_recording(&mut self) {
         debug!("Stopping audio recording");
         
+        // Set the recording flag to false to stop any new samples from being sent
+        self.recording_flag.store(false, Ordering::Relaxed);
+        
         // Check if we have an active stream
         if let Some(stream) = self.stream.take() {
             // Explicitly drop the stream to stop recording
@@ -154,6 +157,14 @@ impl AudioRecorder {
             debug!("Audio stream stopped");
         } else {
             debug!("No active audio stream to stop");
+        }
+        
+        // Drain any remaining samples from the channel
+        if let Some(mut rx) = self.samples_rx.take() {
+            let mut samples = self.samples.lock().unwrap();
+            while let Ok(sample) = rx.try_recv() {
+                samples.push(sample);
+            }
         }
         
         // Log the number of samples collected
@@ -201,9 +212,8 @@ impl AudioRecorder {
     }
 
     /// Create a temporary WAV file with the recorded audio
-    #[instrument(skip(self))]
     pub fn save_to_temp_wav(&self) -> Result<NamedTempFile> {
-        let temp_file = NamedTempFile::new()?;
+        let temp_file = Builder::new().suffix(".wav").tempfile()?;
         
         // Log the number of samples before saving
         let sample_count = {

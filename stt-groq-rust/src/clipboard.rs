@@ -27,10 +27,30 @@ impl ClipboardService for SystemClipboard {
     }
 }
 
+/// Dummy implementation for environments without UI support
+#[cfg(not(feature = "ui"))]
+pub struct SystemClipboard;
+
+#[cfg(not(feature = "ui"))]
+impl ClipboardService for SystemClipboard {
+    fn copy_text(&mut self, text: &str) -> Result<()> {
+        info!("Clipboard copy operation simulated: {}", text);
+        Ok(())
+    }
+    fn paste(&mut self) {
+        info!("Clipboard paste operation simulated");
+    }
+}
+
 /// Copy text to the clipboard and perform a paste operation.
 #[instrument(skip(text))]
 pub fn copy_and_paste(text: &str) -> Result<()> {
+    #[cfg(feature = "ui")]
     let mut clipboard = SystemClipboard;
+    
+    #[cfg(not(feature = "ui"))]
+    let mut clipboard = DummyClipboard;
+    
     clipboard.copy_text(text)?;
     clipboard.paste();
     info!("Copy and paste operation completed");
