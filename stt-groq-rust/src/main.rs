@@ -153,11 +153,15 @@ async fn main() -> Result<()> {
 
     let app_state = Arc::new(AppState::new()?);
 
+    // Get the current runtime handle.
+    let rt_handle = tokio::runtime::Handle::current();
+
     // Create a keyboard handler with a callback to toggle recording.
     let app_state_clone = Arc::clone(&app_state);
     let mut keyboard_handler = KeyboardHandler::new(move || {
         let app_state_clone2 = Arc::clone(&app_state_clone);
-        tokio::spawn(async move {
+        let rt_handle_clone = rt_handle.clone();
+        rt_handle_clone.spawn(async move {
             app_state_clone2.toggle_recording().await;
         });
     });

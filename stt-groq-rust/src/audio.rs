@@ -4,7 +4,7 @@ use cpal::{Sample, SampleFormat, SizedSample};
 use hound::{WavSpec, WavWriter};
 use num_traits::cast::ToPrimitive;
 use std::path::Path;
-use tempfile::NamedTempFile;
+use tempfile::{Builder, NamedTempFile};
 use tokio::sync::mpsc::{self, Sender, Receiver};
 
 pub const SAMPLE_RATE: u32 = 16000;
@@ -135,10 +135,12 @@ impl AudioRecorder {
 
     /// Asynchronously save to a temporary WAV file.
     pub async fn save_to_temp_wav(&mut self) -> Result<NamedTempFile> {
-        let temp_file = NamedTempFile::new()?;
+        // Create a temporary file with a .wav suffix.
+        let temp_file = Builder::new().suffix(".wav").tempfile()?;
         self.save_to_wav(temp_file.path()).await?;
         Ok(temp_file)
-    }
+}
+
 }
 
 impl Default for AudioRecorder {
