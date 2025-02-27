@@ -145,38 +145,35 @@ impl AudioRecorder {
     /// Pauses the stream, sets the recording flag to false, and waits briefly to
     /// allow any in-flight callbacks to finish before dropping the sender.
     pub fn stop_recording(&mut self) {
-        // Set the flag so that the callback will early-exit.
-        self.recording_flag.store(false, Ordering::Relaxed);
-
-        // Pause the stream to stop further callbacks.
-        if let Some(ref stream_wrapper) = self.stream {
-            let stream_lock = stream_wrapper.0.lock().unwrap();
-            if let Err(e) = stream_lock.pause() {
-                error!("Failed to pause audio stream: {}", e);
-            } else {
-                info!("Audio stream paused successfully.");
-            }
+        debug!("Stopping audio recording");
+        
+        // Check if we have an active stream
+        if let Some(stream) = self.stream.take() {
+            // Explicitly drop the stream to stop recording
+            drop(stream);
+            debug!("Audio stream stopped");
+        } else {
+            debug!("No active audio stream to stop");
         }
-        // Wait a short moment (e.g., 200ms) for any in-flight callbacks to complete.
-        thread::sleep(Duration::from_millis(200));
-        // Drop the sender so that the channel will eventually close.
-        self.samples_tx = None;
-        // Drop the stream handle.
-        self.stream = None;
-        info!("Recording stopped.");
+        
+        // Log the number of samples collected
+        let sample_count = {
+            let samples = self.samples.lock().unwrap();
+            samples.len()
+        };
+        
+        debug!(sample_count, "Recording stopped with samples");
     }
 
-    /// Asynchronously drain the samples and save the audio as a WAV file.
-    pub async fn save_to_wav(&mut self, path: &Path) -> Result<()> {
-        let mut samples = Vec::new();
-        if let Some(rx) = self.samples_rx.as_mut() {
-            // Drain the channel until it is closed.
-            while let Some(sample) = rx.recv().await {
-                samples.push(sample);
-            }
+    /// Save the recorded audio to a WAV file
+    pub fn save_to_wav(&self, path: &Path) -> Result<()> {
+        let samples = self.samples.lock().unwrap();
+        
+        if samples.is_empty() {
+            warn!("No audio samples to save!");
+            return Err(anyhow::anyhow!("No audio samples to save"));
         }
-        debug!("Collected {} samples for WAV file", samples.len());
-
+        
         let spec = WavSpec {
             channels: CHANNELS,
             sample_rate: SAMPLE_RATE,
@@ -189,16 +186,52 @@ impl AudioRecorder {
         for sample in samples {
             writer.write_sample(sample)?;
         }
+
+        // Explicitly flush and finalize the writer
+        writer.flush()?;
         writer.finalize()?;
-        info!("WAV file saved to {:?}", path);
+        
+        debug!(
+            path = %path.display(),
+            sample_count = samples.len(),
+            "Saved WAV file successfully"
+        );
+        
         Ok(())
     }
-    
-    /// Asynchronously save the recorded audio to a temporary WAV file with a proper .wav suffix.
-    pub async fn save_to_temp_wav(&mut self) -> Result<NamedTempFile> {
-        // Use Builder to ensure the temporary file has a .wav extension.
-        let temp_file = Builder::new().suffix(".wav").tempfile()?;
-        self.save_to_wav(temp_file.path()).await?;
+
+    /// Create a temporary WAV file with the recorded audio
+    #[instrument(skip(self))]
+    pub fn save_to_temp_wav(&self) -> Result<NamedTempFile> {
+        let temp_file = NamedTempFile::new()?;
+        
+        // Log the number of samples before saving
+        let sample_count = {
+            let samples = self.samples.lock().unwrap();
+            debug!(sample_count = samples.len(), "Number of audio samples to save");
+            samples.len()
+        };
+        
+        self.save_to_wav(temp_file.path())?;
+        
+        // Log the file size after saving
+        if let Ok(metadata) = std::fs::metadata(temp_file.path()) {
+            let file_size = metadata.len();
+            
+            // Calculate expected file size (header + data)
+            let expected_size = 44 + (sample_count * 2); // 44 bytes for WAV header, 2 bytes per sample
+            
+            debug!(
+                file_size,
+                expected_size,
+                "Saved WAV file details"
+            );
+            
+            if file_size < 100 {
+                warn!(file_size, "WAV file is suspiciously small!");
+            }
+        }
+        
         Ok(temp_file)
     }
 }

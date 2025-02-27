@@ -66,61 +66,63 @@ impl AppState {
         }
     }
 
-    /// Process the recording: stop, transcribe, and paste.
-    /// // In AppState::process_recording:
-async fn process_recording(&self) {
-    // Clone needed Arcs.
-    let recorder_clone = Arc::clone(&self.recorder);
-    let recording_start_time_clone = Arc::clone(&self.recording_start_time);
-    let groq_client_clone = Arc::clone(&self.groq_client);
-    let model_selector_clone = Arc::clone(&self.model_selector);
-
-    {
-        let _span = tracing::info_span!("process_recording_thread").entered();
-        info!("Processing recording synchronously...");
-    }
-
-    let mut recorder = recorder_clone.lock().await;
-    recorder.stop_recording();
-
-    let start_time = recording_start_time_clone.lock().await;
-    if let Some(start) = *start_time {
-        let duration = start.elapsed().as_secs_f64();
-        debug!(duration, "Recording duration");
-        if duration < MIN_RECORDING_DURATION {
-            warn!(
-                "Recording duration was less than {} seconds. Skipping transcription.",
-                MIN_RECORDING_DURATION
-            );
-            return;
-        }
-        match recorder.save_to_temp_wav().await {
-            Ok(temp_file) => {
-                info!("Transcribing audio file synchronously");
-                let model = model_selector_clone.get_next_model();
-                info!(model, "Using model for transcription");
-                // Run synchronous transcription in a blocking task.
-                let transcription_result = tokio::task::spawn_blocking(move || {
-                    groq_client_clone.transcribe_audio_sync(
-                        temp_file.path(),
-                        &model,
-                        Some("The audio is by a programmer discussing programming issues"),
-                        Some("en"),
-                    )
-                })
-                .await;
-                match transcription_result {
-                    Ok(Ok(transcription)) => {
-                        if transcription.len() < 5 {
-                            warn!("Transcription is very short ({} chars). Verify that the recorded audio is not empty.", transcription.len());
-                        }
-                        info!(chars = transcription.len(), "Transcription completed");
-                        // Also log the transcription text.
-                        info!("Transcription text: {}", transcription);
-                        if let Err(e) = clipboard::copy_and_paste(&transcription) {
-                            error!("Failed to copy/paste transcription: {}", e);
-                        } else {
-                            info!("Transcription copied to clipboard");
+    /// Process the recording (stop recording, transcribe, and paste)
+    fn process_recording(&self) {
+        let recorder_clone = Arc::clone(&self.recorder);
+        let recording_start_time_clone = Arc::clone(&self.recording_start_time);
+        let groq_client_clone = Arc::clone(&self.groq_client);
+        let model_selector_clone = Arc::clone(&self.model_selector);
+        
+        thread::spawn(move || {
+            // Stop the recording
+            let mut recorder = recorder_clone.lock().unwrap();
+            recorder.stop_recording();
+            
+            // Add a short delay to ensure all audio data is processed
+            drop(recorder);  // Release the lock before sleeping
+            thread::sleep(Duration::from_millis(500));
+            let mut recorder = recorder_clone.lock().unwrap();
+            
+            // Check recording duration
+            let start_time = *recording_start_time_clone.lock().unwrap();
+            if let Some(start) = start_time {
+                let duration = start.elapsed().as_secs_f64();
+                
+                if duration < MIN_RECORDING_DURATION {
+                    println!("Recording duration was less than {} seconds. Skipping transcription.", MIN_RECORDING_DURATION);
+                    return;
+                }
+                
+                // Save the recording to a temporary file
+                match recorder.save_to_temp_wav() {
+                    Ok(temp_file) => {
+                        println!("Transcribing...");
+                        
+                        // Select the next model
+                        let model = model_selector_clone.get_next_model();
+                        println!("Using model: {}", model);
+                        
+                        // Transcribe the audio
+                        match groq_client_clone.transcribe_audio(
+                            temp_file.path(),
+                            &model,
+                            Some("The audio is by a programmer discussing programming issues"),
+                            Some("en"),
+                        ) {
+                            Ok(transcription) => {
+                                println!("\nTranscription:");
+                                println!("{}", transcription);
+                                
+                                // Copy to clipboard and paste
+                                if let Err(e) = clipboard::copy_and_paste(&transcription) {
+                                    eprintln!("Failed to copy/paste transcription: {}", e);
+                                } else {
+                                    println!("Transcription copied to clipboard.");
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Transcription failed: {}", e);
+                            }
                         }
                     }
                     Ok(Err(e)) => {
