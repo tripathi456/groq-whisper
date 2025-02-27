@@ -7,6 +7,7 @@ use arboard::Clipboard;
 use enigo::{Enigo, Key, KeyboardControllable};
 use std::thread;
 use std::time::Duration;
+use tracing::{debug, info, instrument};
 
 /// Copy text to the system clipboard
 pub fn copy_to_clipboard(text: &str) -> Result<()> {

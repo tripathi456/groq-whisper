@@ -76,10 +76,11 @@ impl KeyboardHandler {
     }
 
     /// Stop monitoring keyboard events
+    #[instrument(skip(self))]
     pub fn stop_monitoring(&self) {
         let mut running = self.running.lock().unwrap();
         *running = false;
-        println!("Stopping keyboard monitoring");
+        info!("Stopping keyboard monitoring");
     }
 }
 

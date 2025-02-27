@@ -10,6 +10,7 @@ mod groq_client;
 mod keyboard;
 mod model;
 mod notifications;
+mod tracing;
 
 use anyhow::{Context, Result};
 use audio::AudioRecorder;
@@ -21,6 +22,7 @@ use notifications::show_notification_default;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
+use tracing::{debug, error, info, info_span, instrument, warn};
 
 /// Minimum recording duration in seconds
 const MIN_RECORDING_DURATION: f64 = 5.0;
@@ -41,6 +43,7 @@ struct AppState {
 
 impl AppState {
     /// Create a new AppState instance
+    #[instrument(skip(self), ret)]
     fn new() -> Result<Self> {
         let groq_client = Arc::new(GroqClient::new()?);
         
@@ -54,6 +57,7 @@ impl AppState {
     }
 
     /// Toggle recording state
+    #[instrument(skip(self))]
     fn toggle_recording(&self) {
         let mut recording = self.recording.lock().unwrap();
         
@@ -62,18 +66,18 @@ impl AppState {
             *recording = true;
             let mut recorder = self.recorder.lock().unwrap();
             if let Err(e) = recorder.start_recording() {
-                eprintln!("Failed to start recording: {}", e);
+                error!("Failed to start recording: {}", e);
                 *recording = false;
                 return;
             }
             
             *self.recording_start_time.lock().unwrap() = Some(Instant::now());
-            println!("Recording started.");
+            info!("Recording started");
             show_notification_default("Recording Started", "Audio recording has started.");
         } else {
             // Stop recording
             *recording = false;
-            println!("Recording stopped.");
+            info!("Recording stopped");
             
             // Process the recording in a separate thread
             self.process_recording();
@@ -81,6 +85,7 @@ impl AppState {
     }
 
     /// Process the recording (stop recording, transcribe, and paste)
+    #[instrument(skip(self))]
     fn process_recording(&self) {
         let recorder_clone = Arc::clone(&self.recorder);
         let recording_start_time_clone = Arc::clone(&self.recording_start_time);
@@ -88,6 +93,9 @@ impl AppState {
         let model_selector_clone = Arc::clone(&self.model_selector);
         
         thread::spawn(move || {
+            // Create a span for the processing thread
+            let _span = info_span!("process_recording_thread").entered();
+            
             // Stop the recording
             let mut recorder = recorder_clone.lock().unwrap();
             recorder.stop_recording();
@@ -96,20 +104,21 @@ impl AppState {
             let start_time = *recording_start_time_clone.lock().unwrap();
             if let Some(start) = start_time {
                 let duration = start.elapsed().as_secs_f64();
+                debug!(duration, "Recording duration");
                 
                 if duration < MIN_RECORDING_DURATION {
-                    println!("Recording duration was less than {} seconds. Skipping transcription.", MIN_RECORDING_DURATION);
+                    warn!("Recording duration was less than {} seconds. Skipping transcription.", MIN_RECORDING_DURATION);
                     return;
                 }
                 
                 // Save the recording to a temporary file
                 match recorder.save_to_temp_wav() {
                     Ok(temp_file) => {
-                        println!("Transcribing...");
+                        info!("Transcribing audio file");
                         
                         // Select the next model
                         let model = model_selector_clone.get_next_model();
-                        println!("Using model: {}", model);
+                        info!(model, "Using model for transcription");
                         
                         // Transcribe the audio
                         match groq_client_clone.transcribe_audio(
@@ -119,23 +128,23 @@ impl AppState {
                             Some("en"),
                         ) {
                             Ok(transcription) => {
-                                println!("\nTranscription:");
-                                println!("{}", transcription);
+                                info!(chars = transcription.len(), "Transcription completed");
+                                debug!("Transcription: {}", transcription);
                                 
                                 // Copy to clipboard and paste
                                 if let Err(e) = clipboard::copy_and_paste(&transcription) {
-                                    eprintln!("Failed to copy/paste transcription: {}", e);
+                                    error!("Failed to copy/paste transcription: {}", e);
                                 } else {
-                                    println!("Transcription copied to clipboard.");
+                                    info!("Transcription copied to clipboard");
                                 }
                             }
                             Err(e) => {
-                                eprintln!("Transcription failed: {}", e);
+                                error!("Transcription failed: {}", e);
                             }
                         }
                     }
                     Err(e) => {
-                        eprintln!("Failed to save audio: {}", e);
+                        error!("Failed to save audio: {}", e);
                     }
                 }
             }
@@ -146,6 +155,10 @@ impl AppState {
 fn main() -> Result<()> {
     // Load environment variables from .env file if present
     dotenv().ok();
+    
+    // Initialize tracing
+    let _guard = tracing::init_tracing();
+    info!("Starting Groq Whisper STT application");
     
     // Create application state
     let app_state = Arc::new(AppState::new()?);
@@ -159,8 +172,8 @@ fn main() -> Result<()> {
     // Start keyboard monitoring
     let _keyboard_thread = keyboard_handler.start_monitoring();
     
-    println!("Double-tap the Alt key (press Alt twice quickly) to toggle recording on/off");
-    println!("Press Ctrl+C to exit");
+    info!("Double-tap the Alt key (press Alt twice quickly) to toggle recording on/off");
+    info!("Press Ctrl+C to exit");
     
     // Keep the main thread running
     loop {

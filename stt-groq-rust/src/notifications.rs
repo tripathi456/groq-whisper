@@ -19,7 +19,7 @@ pub fn show_notification(title: &str, message: &str, timeout_seconds: u32) {
         .timeout(Timeout::Milliseconds(timeout_seconds * 1000))
         .show()
     {
-        eprintln!("Failed to show notification: {}", e);
+        error!("Failed to show notification: {}", e);
     }
 }
 
