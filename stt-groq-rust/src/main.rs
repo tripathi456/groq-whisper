@@ -23,7 +23,6 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 use crate::tracing::{debug, error, info, info_span, warn};
-use tracing_attributes::instrument;
 
 /// Minimum recording duration in seconds
 const MIN_RECORDING_DURATION: f64 = 5.0;

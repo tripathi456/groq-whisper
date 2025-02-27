@@ -144,13 +144,6 @@ impl AudioRecorder {
         self.save_to_wav(temp_file.path())?;
         Ok(temp_file)
     }
-
-    /// Get the duration of the recording in seconds
-    pub fn get_duration_seconds(&self) -> f64 {
-        let samples = self.samples.lock().unwrap();
-        let duration = samples.len() as f64 / (SAMPLE_RATE as f64 * CHANNELS as f64);
-        duration
-    }
 }
 
 impl Default for AudioRecorder {

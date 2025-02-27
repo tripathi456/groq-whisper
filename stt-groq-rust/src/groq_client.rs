@@ -48,14 +48,6 @@ impl GroqClient {
         })
     }
 
-    /// Create a new GroqClient instance with a provided API key
-    pub fn with_api_key(api_key: String) -> Self {
-        Self {
-            api_key,
-            client: Client::new(),
-        }
-    }
-
     /// Transcribe an audio file using the Groq Whisper API
     #[instrument(skip(self, audio_path), fields(audio_path = %audio_path.display(), model = %model), err)]
     pub fn transcribe_audio(

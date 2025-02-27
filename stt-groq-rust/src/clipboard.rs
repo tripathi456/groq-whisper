@@ -19,9 +19,9 @@ pub fn system_paste() {
     let settings = Settings::default();
     let mut enigo = Enigo::new(&settings).unwrap();
     
-    enigo.key(Key::Control, Direction::Press);
-    enigo.key(Key::Unicode('v'), Direction::Click);
-    enigo.key(Key::Control, Direction::Release);
+    let _ = enigo.key(Key::Control, Direction::Press);
+    let _ = enigo.key(Key::Unicode('v'), Direction::Click);
+    let _ = enigo.key(Key::Control, Direction::Release);
 }
 
 /// Copy text to clipboard and paste it
