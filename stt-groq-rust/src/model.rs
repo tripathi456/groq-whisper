@@ -4,6 +4,7 @@
 
 use std::sync::Mutex;
 use std::iter::Cycle;
+use crate::tracing::{debug, instrument};
 
 /// List of available Groq Whisper models.
 pub const MODELS: &[&str] = &[

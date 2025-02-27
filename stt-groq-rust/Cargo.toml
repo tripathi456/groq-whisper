@@ -5,6 +5,10 @@ edition = "2021"
 authors = ["Groq Whisper Port"]
 description = "A Rust port of the Groq Whisper speech-to-text application"
 
+[features]
+default = ["keyboard"]
+keyboard = ["device_query"]
+
 [dependencies]
 # Audio recording
 cpal = "0.15.2"
@@ -17,7 +21,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 # Keyboard handling
-device_query = "1.1.3"
+device_query = { version = "1.1.3", optional = true }
 
 # Clipboard operations
 arboard = "3.2.1"
@@ -32,8 +36,9 @@ anyhow = "1.0.75"
 thiserror = "1.0.50"
 itertools = "0.11.0"
 dotenv = "0.15.0"
+num-traits = "0.2"
 
 # Tracing
-tracing = "0.1"
+tracing = { version = "0.1", features = ["attributes"] }
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 tracing-appender = "0.2"

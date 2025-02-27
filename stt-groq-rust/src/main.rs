@@ -43,7 +43,7 @@ struct AppState {
 
 impl AppState {
     /// Create a new AppState instance
-    #[instrument(skip(self), ret)]
+    #[instrument(ret)]
     fn new() -> Result<Self> {
         let groq_client = Arc::new(GroqClient::new()?);
         
@@ -57,7 +57,7 @@ impl AppState {
     }
 
     /// Toggle recording state
-    #[instrument(skip(self))]
+    #[instrument]
     fn toggle_recording(&self) {
         let mut recording = self.recording.lock().unwrap();
         
@@ -85,7 +85,7 @@ impl AppState {
     }
 
     /// Process the recording (stop recording, transcribe, and paste)
-    #[instrument(skip(self))]
+    #[instrument]
     fn process_recording(&self) {
         let recorder_clone = Arc::clone(&self.recorder);
         let recording_start_time_clone = Arc::clone(&self.recording_start_time);
@@ -165,6 +165,13 @@ fn main() -> Result<()> {
     
     // Create keyboard handler with callback to toggle recording
     let app_state_clone = Arc::clone(&app_state);
+    
+    #[cfg(feature = "keyboard")]
+    info!("Double-tap the Alt key (press Alt twice quickly) to toggle recording on/off");
+    
+    #[cfg(not(feature = "keyboard"))]
+    info!("Keyboard monitoring not available (compiled without keyboard support)");
+    
     let keyboard_handler = KeyboardHandler::new(move || {
         app_state_clone.toggle_recording();
     });
@@ -172,7 +179,6 @@ fn main() -> Result<()> {
     // Start keyboard monitoring
     let _keyboard_thread = keyboard_handler.start_monitoring();
     
-    info!("Double-tap the Alt key (press Alt twice quickly) to toggle recording on/off");
     info!("Press Ctrl+C to exit");
     
     // Keep the main thread running

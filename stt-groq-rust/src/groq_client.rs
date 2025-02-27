@@ -110,8 +110,9 @@ impl GroqClient {
 
         // Check for errors
         if !response.status().is_success() {
+            let status = response.status();
             let error_text = response.text()?;
-            error!(status = %response.status(), error = %error_text, "API request failed");
+            error!(status = %status, error = %error_text, "API request failed");
             return Err(anyhow::anyhow!("API error: {}", error_text));
         }
 
