@@ -64,12 +64,22 @@ impl GroqClient {
         prompt: Option<&str>,
         language: Option<&str>,
     ) -> Result<String> {
+        // Check if the file exists
+        if !audio_path.exists() {
+            return Err(anyhow::anyhow!("Audio file does not exist: {}", audio_path.display()));
+        }
+        
+        // Get file metadata to log the size
+        let metadata = std::fs::metadata(audio_path)?;
+        println!("Audio file size: {} bytes", metadata.len());
+        
         // Read the audio file
         let mut file = File::open(audio_path)?;
         let mut buffer = Vec::new();
         file.read_to_end(&mut buffer)?;
         
         debug!(bytes = buffer.len(), "Read audio file");
+        println!("Audio buffer size: {} bytes", buffer.len());
 
         // Create the file part
         let file_name = audio_path
