@@ -113,4 +113,17 @@ impl GroqClient {
         info!("Received synchronous transcription ({} chars): {}", transcription.len(), transcription);
         Ok(transcription)
     }
+    
+    /// Transcribe audio file to text.
+    /// This is an alias for transcribe_audio_sync for backward compatibility.
+    #[instrument(skip(self, audio_path), fields(audio_path = %audio_path.display()))]
+    pub fn transcribe_audio(
+        &self,
+        audio_path: &Path,
+        model: &str,
+        prompt: Option<&str>,
+        language: Option<&str>,
+    ) -> Result<String> {
+        self.transcribe_audio_sync(audio_path, model, prompt, language)
+    }
 }

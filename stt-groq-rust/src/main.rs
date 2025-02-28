@@ -74,18 +74,22 @@ impl AppState {
         let groq_client_clone = Arc::clone(&self.groq_client);
         let model_selector_clone = Arc::clone(&self.model_selector);
         
+        // Use a standard thread instead of tokio task since we're doing synchronous operations
         thread::spawn(move || {
-            // Stop the recording
-            let mut recorder = recorder_clone.lock().unwrap();
+            // Get the tokio runtime handle for async operations
+            let rt = tokio::runtime::Handle::current();
+            
+            // Stop the recording - this needs to be done in the tokio runtime
+            let mut recorder = rt.block_on(recorder_clone.lock());
             recorder.stop_recording();
             
             // Add a short delay to ensure all audio data is processed
             drop(recorder);  // Release the lock before sleeping
             thread::sleep(Duration::from_millis(500));
-            let mut recorder = recorder_clone.lock().unwrap();
+            let mut recorder = rt.block_on(recorder_clone.lock());
             
             // Check recording duration
-            let start_time = *recording_start_time_clone.lock().unwrap();
+            let start_time = *rt.block_on(recording_start_time_clone.lock());
             if let Some(start) = start_time {
                 let duration = start.elapsed().as_secs_f64();
                 
