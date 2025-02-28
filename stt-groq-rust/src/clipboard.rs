@@ -1,29 +1,55 @@
-use anyhow::Result;
-use arboard::Clipboard;
-use enigo::{Enigo, Keyboard, Key, Settings, Direction};
-use crate::tracing::{debug, info, instrument};
+//! Clipboard operations module.
 
-/// A trait to abstract clipboard operations.
-pub trait ClipboardService: Send + Sync {
+#[cfg(feature = "ui")]
+use arboard::Clipboard;
+#[cfg(feature = "ui")]
+use enigo::{Enigo, Keyboard, Key, Settings, Direction};
+use crate::tracing::{info, instrument};
+use anyhow::Result;
+
+/// Trait for clipboard operations.
+pub trait ClipboardService {
+    /// Copy text to the clipboard.
     fn copy_text(&mut self, text: &str) -> Result<()>;
+    /// Simulate a paste operation.
     fn paste(&mut self);
 }
 
-/// The production implementation using arboard and enigo.
+/// System clipboard implementation.
+#[cfg(feature = "ui")]
 pub struct SystemClipboard;
 
+#[cfg(feature = "ui")]
 impl ClipboardService for SystemClipboard {
     fn copy_text(&mut self, text: &str) -> Result<()> {
         let mut clipboard = Clipboard::new()?;
         clipboard.set_text(text)?;
+        info!("Text copied to clipboard: {}", text);
+        Ok(())
+    }
+
+    fn paste(&mut self) {
+        let mut enigo = Enigo::new(&Settings::default()).unwrap();
+        enigo.key(Key::Control, Direction::Press);
+        enigo.key(Key::Layout('v'), Direction::Press);
+        enigo.key(Key::Layout('v'), Direction::Release);
+        enigo.key(Key::Control, Direction::Release);
+        info!("Paste operation simulated");
+    }
+}
+
+/// Dummy implementation for environments without UI support
+#[cfg(not(feature = "ui"))]
+pub struct SystemClipboard;
+
+#[cfg(not(feature = "ui"))]
+impl ClipboardService for SystemClipboard {
+    fn copy_text(&mut self, text: &str) -> Result<()> {
+        info!("Clipboard copy operation simulated: {}", text);
         Ok(())
     }
     fn paste(&mut self) {
-        let settings = Settings::default();
-        let mut enigo = Enigo::new(&settings).unwrap();
-        let _ = enigo.key(Key::Control, Direction::Press);
-        let _ = enigo.key(Key::Unicode('v'), Direction::Click);
-        let _ = enigo.key(Key::Control, Direction::Release);
+        info!("Clipboard paste operation simulated");
     }
 }
 
